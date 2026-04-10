@@ -1,0 +1,34 @@
+Composite Behavioral Modeling for Identity Theft Detection in Online Social Networks
+
+
+Composite behavioral modeling,identity theft detection,joint models,online social networks (OSNs).
+
+
+
+IEEE Transactions on Computational Social Systems,Volume:9,Issue:2,Issue Date:April.2022
+
+
+Composite_Behavioral_Modeling
+
+
+composite_behavioral_modeling
+
+
+identity_theft_detection
+
+Account_Id
+Trans_Id
+Age
+Followers
+NAME_CONTRACT_TYPE
+GENDER
+AMT_INCOME_TOTAL
+AMT_CREDIT
+AMT_ANNUITY
+AMT_GOODS_PRICE
+NAME_INCOME_TYPE
+NAME_FAMILY_STATUS
+Prediction
+
+
+
