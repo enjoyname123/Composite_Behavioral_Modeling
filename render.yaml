@@ -5,11 +5,9 @@ services:
     plan: free
     buildCommand: |
       pip install -r requirements.txt
-      python Composite_Behavioral_Modeling/Composite_Behavioral_Modeling/composite_behavioral_modeling/manage.py migrate
-      python Composite_Behavioral_Modeling/Composite_Behavioral_Modeling/composite_behavioral_modeling/manage.py collectstatic --noinput
-    startCommand: |
-      cd Composite_Behavioral_Modeling/Composite_Behavioral_Modeling/composite_behavioral_modeling
-      gunicorn composite_behavioral_modeling.wsgi:application --bind 0.0.0.0:$PORT
+      python manage.py migrate
+      python manage.py collectstatic --noinput
+    startCommand: gunicorn composite_behavioral_modeling.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.7
