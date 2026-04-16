@@ -139,5 +139,8 @@ if not DEBUG:
     }
 
 # Add this at the bottom of settings.py
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'Template', 'images'),
+]
+
 
