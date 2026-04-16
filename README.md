@@ -35,7 +35,7 @@ This project is a Django-based web application designed to detect identity theft
 ## Installation & Setup
 
 ### Prerequisites
-*   Python 3.10 or higher
+*   Python 3.12 or higher
 *   `pip` (Python package manager)
 
 ### Local Setup
@@ -47,13 +47,13 @@ This project is a Django-based web application designed to detect identity theft
 
 2.  **Create Virtual Environment**:
     ```bash
-    python -m venv venv
+    python3 -m venv venv
     source venv/bin/activate  # On Windows: venv\Scripts\activate
     ```
 
 3.  **Install Dependencies**:
     ```bash
-    pip install django pandas scikit-learn xlwt
+    pip install -r requirements.txt
     ```
 
 4.  **Database Migration**:

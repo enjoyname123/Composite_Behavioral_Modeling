@@ -3,11 +3,14 @@ from django.db.models import Q
 from django.shortcuts import render, redirect, get_object_or_404
 
 import pandas as pd
-from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-from sklearn.metrics import accuracy_score
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import VotingClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
 # Create your views here.
 from Remote_User.models import ClientRegister_Model,identity_theft_detection,detection_ratio,detection_accuracy
 
@@ -64,121 +67,99 @@ def ViewYourProfile(request):
 
 def Predict_Theft_Status(request):
     if request.method == "POST":
-
-        if request.method == "POST":
-
-            Account_Id=request.POST.get('Account_Id')
-            Trans_Id=request.POST.get('Trans_Id')
-            Age=request.POST.get('Age')
-            Followers=request.POST.get('Followers')
-            NAME_CONTRACT_TYPE=request.POST.get('NAME_CONTRACT_TYPE')
-            GENDER=request.POST.get('GENDER')
-            AMT_INCOME_TOTAL=request.POST.get('AMT_INCOME_TOTAL')
-            AMT_CREDIT=request.POST.get('AMT_CREDIT')
-            AMT_ANNUITY=request.POST.get('AMT_ANNUITY')
-            AMT_GOODS_PRICE=request.POST.get('AMT_GOODS_PRICE')
-            NAME_INCOME_TYPE=request.POST.get('NAME_INCOME_TYPE')
-            NAME_FAMILY_STATUS=request.POST.get('NAME_FAMILY_STATUS')
-
+        Account_Id=request.POST.get('Account_Id')
+        Trans_Id=request.POST.get('Trans_Id')
+        Age=request.POST.get('Age')
+        Followers=request.POST.get('Followers')
+        NAME_CONTRACT_TYPE=request.POST.get('NAME_CONTRACT_TYPE')
+        GENDER=request.POST.get('GENDER')
+        AMT_INCOME_TOTAL=request.POST.get('AMT_INCOME_TOTAL')
+        AMT_CREDIT=request.POST.get('AMT_CREDIT')
+        AMT_ANNUITY=request.POST.get('AMT_ANNUITY')
+        AMT_GOODS_PRICE=request.POST.get('AMT_GOODS_PRICE')
+        NAME_INCOME_TYPE=request.POST.get('NAME_INCOME_TYPE')
+        NAME_FAMILY_STATUS=request.POST.get('NAME_FAMILY_STATUS')
 
         df = pd.read_csv('Datasets.csv')
+        df['results'] = df['Label'].astype(int)
 
-        def apply_response(Label):
-            if (Label == 0):
-                return 0  # No Theft or Fraud Found
-            elif(Label ==1):
-                return 1  # Theft or Fraud Found
+        feature_cols = [
+            'Age', 'Followers', 'NAME_CONTRACT_TYPE', 'GENDER',
+            'AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE',
+            'NAME_INCOME_TYPE', 'NAME_FAMILY_STATUS'
+        ]
+        categorical_cols = ['NAME_CONTRACT_TYPE', 'GENDER', 'NAME_INCOME_TYPE', 'NAME_FAMILY_STATUS']
+        numeric_cols = ['Age', 'Followers', 'AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']
 
-
-        df['results'] = df['Label'].apply(apply_response)
-
-        cv = CountVectorizer()
-        X = df['Account_Id']
+        X = df[feature_cols]
         y = df['results']
 
-        print("Account_Id")
-        print(X)
-        print("Results")
-        print(y)
+        numeric_transformer = Pipeline([
+            ('imputer', SimpleImputer(strategy='median')),
+            ('scaler', StandardScaler()),
+        ])
+        categorical_transformer = Pipeline([
+            ('imputer', SimpleImputer(strategy='most_frequent')),
+            ('onehot', OneHotEncoder(handle_unknown='ignore', drop='first')),
+        ])
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', numeric_transformer, numeric_cols),
+                ('cat', categorical_transformer, categorical_cols),
+            ],
+            remainder='drop'
+        )
 
-        cv = CountVectorizer()
-        X = cv.fit_transform(X)
+        models = [
+            ('random_forest', Pipeline([
+                ('preprocessor', preprocessor),
+                ('classifier', RandomForestClassifier(n_estimators=200, class_weight='balanced', random_state=42))
+            ])),
+            ('gradient_boosting', Pipeline([
+                ('preprocessor', preprocessor),
+                ('classifier', GradientBoostingClassifier(n_estimators=150, learning_rate=0.1, max_depth=3, random_state=42))
+            ])),
+            ('logistic', Pipeline([
+                ('preprocessor', preprocessor),
+                ('classifier', LogisticRegression(max_iter=1000, class_weight='balanced', random_state=42))
+            ])),
+        ]
 
-        models = []
-        from sklearn.model_selection import train_test_split
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
-        X_train.shape, X_test.shape, y_train.shape
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.20, stratify=y, random_state=42
+        )
 
-        print("Naive Bayes")
+        best_model = None
+        best_score = 0.0
+        for name, model in models:
+            model.fit(X_train, y_train)
+            score = accuracy_score(y_test, model.predict(X_test))
+            if score > best_score:
+                best_score = score
+                best_model = model
 
-        from sklearn.naive_bayes import MultinomialNB
+        if best_model is None:
+            best_model = models[0][1]
 
-        NB = MultinomialNB()
-        NB.fit(X_train, y_train)
-        predict_nb = NB.predict(X_test)
-        naivebayes = accuracy_score(y_test, predict_nb) * 100
-        print("ACCURACY")
-        print(naivebayes)
-        print("CLASSIFICATION REPORT")
-        print(classification_report(y_test, predict_nb))
-        print("CONFUSION MATRIX")
-        print(confusion_matrix(y_test, predict_nb))
-        models.append(('naive_bayes', NB))
+        model_name = [name for name, model in models if model is best_model][0]
+        print(f"Best model: {model_name} accuracy={best_score*100:.2f}%")
 
-        # SVM Model
-        print("SVM")
-        from sklearn import svm
+        input_data = {
+            'Age': float(Age or 0),
+            'Followers': float(Followers or 0),
+            'NAME_CONTRACT_TYPE': NAME_CONTRACT_TYPE or '',
+            'GENDER': GENDER or '',
+            'AMT_INCOME_TOTAL': float(AMT_INCOME_TOTAL or 0),
+            'AMT_CREDIT': float(AMT_CREDIT or 0),
+            'AMT_ANNUITY': float(AMT_ANNUITY or 0),
+            'AMT_GOODS_PRICE': float(AMT_GOODS_PRICE or 0),
+            'NAME_INCOME_TYPE': NAME_INCOME_TYPE or '',
+            'NAME_FAMILY_STATUS': NAME_FAMILY_STATUS or ''
+        }
+        input_df = pd.DataFrame([input_data])
+        predict_text = best_model.predict(input_df)
 
-        lin_clf = svm.LinearSVC()
-        lin_clf.fit(X_train, y_train)
-        predict_svm = lin_clf.predict(X_test)
-        svm_acc = accuracy_score(y_test, predict_svm) * 100
-        print("ACCURACY")
-        print(svm_acc)
-        print("CLASSIFICATION REPORT")
-        print(classification_report(y_test, predict_svm))
-        print("CONFUSION MATRIX")
-        print(confusion_matrix(y_test, predict_svm))
-        models.append(('svm', lin_clf))
-
-        print("Logistic Regression")
-
-        from sklearn.linear_model import LogisticRegression
-
-        reg = LogisticRegression(random_state=0, solver='lbfgs').fit(X_train, y_train)
-        y_pred = reg.predict(X_test)
-        print("ACCURACY")
-        print(accuracy_score(y_test, y_pred) * 100)
-        print("CLASSIFICATION REPORT")
-        print(classification_report(y_test, y_pred))
-        print("CONFUSION MATRIX")
-        print(confusion_matrix(y_test, y_pred))
-        models.append(('logistic', reg))
-
-        print("Decision Tree Classifier")
-        dtc = DecisionTreeClassifier()
-        dtc.fit(X_train, y_train)
-        dtcpredict = dtc.predict(X_test)
-        print("ACCURACY")
-        print(accuracy_score(y_test, dtcpredict) * 100)
-        print("CLASSIFICATION REPORT")
-        print(classification_report(y_test, dtcpredict))
-        print("CONFUSION MATRIX")
-        print(confusion_matrix(y_test, dtcpredict))
-        models.append(('DecisionTreeClassifier', dtc))
-
-        classifier = VotingClassifier(models)
-        classifier.fit(X_train, y_train)
-        y_pred = classifier.predict(X_test)
-
-        Account_Id1 = [Account_Id]
-        vector1 = cv.transform(Account_Id1).toarray()
-        predict_text = classifier.predict(vector1)
-
-        pred = str(predict_text).replace("[", "")
-        pred1 = pred.replace("]", "")
-
-        prediction = int(pred1)
+        prediction = int(predict_text[0])
 
         if (prediction == 0):
             val = 'No Theft or Fraud Found'
@@ -186,7 +167,6 @@ def Predict_Theft_Status(request):
             val = 'Theft or Fraud Found'
 
         print(val)
-        print(pred1)
 
         identity_theft_detection.objects.create(
         Account_Id=Account_Id,

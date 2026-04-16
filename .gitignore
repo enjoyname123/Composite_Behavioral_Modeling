@@ -1,2 +1,18 @@
 # Local Netlify folder
 .netlify
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# SQLite database file
+db.sqlite3
+
+# Virtual environment
+venv/
+.env
+
+# Django static files
+/staticfiles/

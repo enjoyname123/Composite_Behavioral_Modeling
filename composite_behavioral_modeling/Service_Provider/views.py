@@ -9,10 +9,14 @@ from django.http import HttpResponse
 
 
 import pandas as pd
-from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-from sklearn.metrics import accuracy_score
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
 
 # Create your views here.
 from Remote_User.models import ClientRegister_Model,identity_theft_detection,detection_ratio,detection_accuracy
@@ -121,92 +125,69 @@ def train_model(request):
     detection_accuracy.objects.all().delete()
 
     df = pd.read_csv('Datasets.csv')
+    df['results'] = df['Label'].astype(int)
 
-    def apply_response(Label):
-        if (Label == 0):
-            return 0  # No Theft or Fraud Found
-        elif (Label == 1):
-            return 1  # Theft or Fraud Found
+    feature_cols = [
+        'Age', 'Followers', 'NAME_CONTRACT_TYPE', 'GENDER',
+        'AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE',
+        'NAME_INCOME_TYPE', 'NAME_FAMILY_STATUS'
+    ]
+    categorical_cols = ['NAME_CONTRACT_TYPE', 'GENDER', 'NAME_INCOME_TYPE', 'NAME_FAMILY_STATUS']
+    numeric_cols = ['Age', 'Followers', 'AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']
 
-    df['results'] = df['Label'].apply(apply_response)
-
-    cv = CountVectorizer()
-    X = df['Account_Id']
+    X = df[feature_cols]
     y = df['results']
 
-    print("Account_Id")
-    print(X)
-    print("Results")
-    print(y)
+    numeric_transformer = Pipeline([
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler()),
+    ])
+    categorical_transformer = Pipeline([
+        ('imputer', SimpleImputer(strategy='most_frequent')),
+        ('onehot', OneHotEncoder(handle_unknown='ignore', drop='first')),
+    ])
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numeric_transformer, numeric_cols),
+            ('cat', categorical_transformer, categorical_cols),
+        ],
+        remainder='drop'
+    )
 
-    cv = CountVectorizer()
-    X = cv.fit_transform(X)
+    models = [
+        ('extra_tree', Pipeline([
+            ('preprocessor', preprocessor),
+            ('classifier', ExtraTreesClassifier(class_weight='balanced', random_state=42))
+        ])),
+        ('random_forest', Pipeline([
+            ('preprocessor', preprocessor),
+            ('classifier', RandomForestClassifier(n_estimators=200, class_weight='balanced', random_state=42))
+        ])),
+        ('gradient_boosting', Pipeline([
+            ('preprocessor', preprocessor),
+            ('classifier', GradientBoostingClassifier(n_estimators=150, learning_rate=0.1, max_depth=3, random_state=42))
+        ])),
+        ('logistic', Pipeline([
+            ('preprocessor', preprocessor),
+            ('classifier', LogisticRegression(max_iter=1000, class_weight='balanced', random_state=42))
+        ])),
+    ]
 
-    models = []
-    from sklearn.model_selection import train_test_split
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20)
-    X_train.shape, X_test.shape, y_train.shape
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.20, stratify=y, random_state=42
+    )
 
-    print("Extra Tree Classifier")
-    from sklearn.tree import ExtraTreeClassifier
-    etc_clf = ExtraTreeClassifier()
-    etc_clf.fit(X_train, y_train)
-    etcpredict = etc_clf.predict(X_test)
-    print("ACCURACY")
-    print(accuracy_score(y_test, etcpredict) * 100)
-    print("CLASSIFICATION REPORT")
-    print(classification_report(y_test, etcpredict))
-    print("CONFUSION MATRIX")
-    print(confusion_matrix(y_test, etcpredict))
-    models.append(('RandomForestClassifier', etc_clf))
-    detection_accuracy.objects.create(names="Extra Tree Classifier", ratio=accuracy_score(y_test, etcpredict) * 100)
-
-    # SVM Model
-    print("SVM")
-    from sklearn import svm
-    lin_clf = svm.LinearSVC()
-    lin_clf.fit(X_train, y_train)
-    predict_svm = lin_clf.predict(X_test)
-    svm_acc = accuracy_score(y_test, predict_svm) * 100
-    print(svm_acc)
-    print("CLASSIFICATION REPORT")
-    print(classification_report(y_test, predict_svm))
-    print("CONFUSION MATRIX")
-    print(confusion_matrix(y_test, predict_svm))
-    models.append(('svm', lin_clf))
-    detection_accuracy.objects.create(names="SVM", ratio=svm_acc)
-
-    print("Logistic Regression")
-
-    from sklearn.linear_model import LogisticRegression
-    reg = LogisticRegression(random_state=0, solver='lbfgs').fit(X_train, y_train)
-    y_pred = reg.predict(X_test)
-    print("ACCURACY")
-    print(accuracy_score(y_test, y_pred) * 100)
-    print("CLASSIFICATION REPORT")
-    print(classification_report(y_test, y_pred))
-    print("CONFUSION MATRIX")
-    print(confusion_matrix(y_test, y_pred))
-    models.append(('logistic', reg))
-    detection_accuracy.objects.create(names="Logistic Regression", ratio=accuracy_score(y_test, y_pred) * 100)
-
-
-    print("Gradient Boosting Classifier")
-
-    from sklearn.ensemble import GradientBoostingClassifier
-    clf = GradientBoostingClassifier(n_estimators=100, learning_rate=1.0, max_depth=1, random_state=0).fit(
-        X_train,
-        y_train)
-    clfpredict = clf.predict(X_test)
-    print("ACCURACY")
-    print(accuracy_score(y_test, clfpredict) * 100)
-    print("CLASSIFICATION REPORT")
-    print(classification_report(y_test, clfpredict))
-    print("CONFUSION MATRIX")
-    print(confusion_matrix(y_test, clfpredict))
-    models.append(('GradientBoostingClassifier', clf))
-    detection_accuracy.objects.create(names="Gradient Boosting Classifier",
-                                      ratio=accuracy_score(y_test, clfpredict) * 100)
+    for name, model in models:
+        model.fit(X_train, y_train)
+        score = accuracy_score(y_test, model.predict(X_test)) * 100
+        print(name)
+        print("ACCURACY")
+        print(score)
+        print("CLASSIFICATION REPORT")
+        print(classification_report(y_test, model.predict(X_test)))
+        print("CONFUSION MATRIX")
+        print(confusion_matrix(y_test, model.predict(X_test)))
+        detection_accuracy.objects.create(names=name.replace('_', ' ').title(), ratio=score)
 
 
 
